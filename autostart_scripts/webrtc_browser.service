@@ -1,0 +1,12 @@
+[Unit]
+Description=All of ROS running on the background
+After=multi-user.target
+
+[Service]
+Type=idle
+User=jetson
+ExecStart=/bin/bash /home/jetson/dev_ws/src/spider_bot/autostart_scripts/start_browser.sh
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

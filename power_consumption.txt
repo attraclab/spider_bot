@@ -1,0 +1,7 @@
+Voltage 12V
+
+system idle (servo off) : 0.8~1.0A
+
+servo start up : 4.0A
+stand up (standby) : 2.0A
+walking : 4.0-6.0A
