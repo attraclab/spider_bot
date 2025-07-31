@@ -6,6 +6,8 @@ from std_msgs.msg import Int16MultiArray, Int8, UInt8MultiArray, Float32MultiArr
 from spider_bot.SpiderBotLib import *
 from spider_bot.SpiderBotDriver import *
 import joblib
+from rclpy.parameter import Parameter
+from rcl_interfaces.msg import SetParametersResult
 
 #############################
 ### Setup SpiderBotDriver ###
@@ -27,7 +29,7 @@ WG_DATA_POINT_ALL = lib.WG_DATA_POINT_ALL
 #################
 ### SVM Model ###
 #################
-svm_model = joblib.load('./svm_models/20240123_641dataset.joblib')
+svm_model = joblib.load('/home/jetson/dev_ws/src/spider_bot/spider_bot/svm_models/20240123_641dataset.joblib')
 
 class SpiderBotControl(Node):
 
@@ -35,6 +37,16 @@ class SpiderBotControl(Node):
 
 		super().__init__('spider_bot_control')
 		self.get_logger().info('Start spider_bot_control node')
+
+		### ROS parameters ###
+		self.declare_parameter('show_log', True)
+
+		self.add_on_set_parameters_callback(self.parameter_callback)
+
+		self.show_log = self.get_parameter('show_log').get_parameter_value().bool_value
+
+		self.get_logger().info("Using parameters as below")
+		self.get_logger().info("show_log: {}".format(self.show_log))
 
 		### Standby movement ###
 		self.coxa_pre_home_ang = 0.0
@@ -267,10 +279,20 @@ class SpiderBotControl(Node):
 		timer_period = 0.01
 		self.timer = self.create_timer(timer_period, self.timer_callback)
 
+	def _print(self, msg):
+		self.get_logger().info(msg)
+
 
 	#####################
 	### ROS callbacks ###
 	#####################
+	def parameter_callback(self, params):
+		for param in params:
+			if (param.name == 'show_log') and (param.type_ == Parameter.Type.BOOL):
+				self.show_log = param.value
+
+		self.get_logger().info("Updated parameter")
+
 	def sbus_rc_callback(self, msg):
 
 		self.sbus_str = msg.data[0]
@@ -296,11 +318,11 @@ class SpiderBotControl(Node):
 
 		self.prev_control_mode = self.control_mode
 		self.control_mode = msg.data
-		print("prev_control_mode", self.prev_control_mode)
-		print("control_mode", self.control_mode)
+		self._print("prev_control_mode {}".format(self.prev_control_mode))
+		self._print("control_mode {}".format(self.control_mode))
 
 		if (self.control_mode == 2) and (self.prev_control_mode != self.control_mode):
-			print("change to current-base control")
+			self._print("change to current-base control")
 			angle_list = [
 						self.coxa_home_ang, self.femur_home_ang, self.tibia_home_ang,
 						self.coxa_home_ang, self.femur_home_ang, self.tibia_home_ang,
@@ -339,7 +361,7 @@ class SpiderBotControl(Node):
 			self.height_cmd = 80.0
 
 		elif ((self.control_mode == 0) or (self.control_mode == 1)) and (self.prev_control_mode != self.control_mode) and ((self.prev_control_mode == 2) or (self.prev_control_mode == 3)):
-			print("change to position control")
+			self._print("change to position control")
 
 			## if came from Rough-Walking, need to lower the height back first.
 			if self.prev_control_mode == 2:
@@ -390,7 +412,7 @@ class SpiderBotControl(Node):
 					time.sleep(sleep_time)
 
 		elif (self.control_mode == 3) and (self.prev_control_mode != self.control_mode):
-			print("chang to inspectio mode")
+			self._print("chang to inspectio mode")
 
 			coxa_current = 500
 			femur_current = 500
@@ -419,7 +441,7 @@ class SpiderBotControl(Node):
 
 	
 	def console_joy_callback(self, msg):
-		# print(msg)
+		# self._print(msg)
 		self.str_axis = msg.data[0]
 		self.thr_axis = msg.data[1]
 		self.turn_axis = msg.data[2]
@@ -428,7 +450,7 @@ class SpiderBotControl(Node):
 		self.move_ang = np.degrees(np.arctan2(-self.str_axis, self.thr_axis))%360.0
 
 	def height_cmd_callback(self, msg):
-		print("height_cmd", msg.data)
+		self._print("height_cmd {}".format(msg.data))
 		self.height_cmd = msg.data
 
 		if self.control_mode != 3:
@@ -441,7 +463,7 @@ class SpiderBotControl(Node):
 			self.got_height_cmd_inspection = True
 
 	def pitch_cmd_callback(self, msg):
-		print("pitch_cmd", msg.data)
+		self._print("pitch_cmd {}".format(msg.data))
 		self.pitch_cmd = msg.data
 		self.prev_pitch_cmd = self.pitch_cmd
 
@@ -455,7 +477,7 @@ class SpiderBotControl(Node):
 					self.setCustomHeightHomePose()
 
 	def reset_height_callback(self, msg):
-		print("reset height")
+		self._print("reset height")
 		self.height_cmd = 0.0
 		self.pitch_cmd = 0.0
 		self.prev_pitch_cmd = 0.0
@@ -463,7 +485,7 @@ class SpiderBotControl(Node):
 		self.resetCustomHeight_homePose()
 
 	def reset_pitch_callback(self, msg):
-		print("reset pitch")
+		self._print("reset pitch")
 		self.pitch_cmd = 0.0
 		self.prev_pitch_cmd = 0.0
 		self.setBodyHeight(self.height_cmd)
@@ -985,9 +1007,9 @@ class SpiderBotControl(Node):
 		leg5_x, leg5_y, leg5_z = lib.fwd(np.radians(driver.joint_deg_cmd[13]), np.radians(driver.joint_deg_cmd[14]), np.radians(driver.joint_deg_cmd[15]))
 		leg6_x, leg6_y, leg6_z = lib.fwd(np.radians(driver.joint_deg_cmd[16]), np.radians(driver.joint_deg_cmd[17]), np.radians(driver.joint_deg_cmd[18]))
 
-		# print(leg1_z, leg4_z, leg5_z, leg6_z)
+		# self._print(leg1_z, leg4_z, leg5_z, leg6_z)
 		self.INSPECT_Z_Home = (leg1_z + leg4_z + leg5_z + leg6_z) / 4
-		# print("INSPECT_Z_Home", self.INSPECT_Z_Home)
+		# self._print("INSPECT_Z_Home", self.INSPECT_Z_Home)
 
 		self.insp_leg_xyz = {'x': self.leg2_x, 'y': self.leg2_y, 'z': self.leg2_z}
 
@@ -1021,7 +1043,7 @@ class SpiderBotControl(Node):
 					self.reset_leg_seq_list.append(most_lift_up_idx+1)
 					z_array[most_lift_up_idx] = -1000
 
-				print("reset_leg_seq_list", self.reset_leg_seq_list)
+				self._print("reset_leg_seq_list {}".format(self.reset_leg_seq_list))
 				# quit()
 
 			if (not self.reset_moving) and (not self.home_moving):
@@ -1046,7 +1068,7 @@ class SpiderBotControl(Node):
 				elif self.leg_no == 6:
 					self.start_id = 16
 
-				print("reset update leg number {:d}".format(self.leg_no))
+				self._print("reset update leg number {:d}".format(self.leg_no))
 
 				self.reset_moving = True
 
@@ -1055,14 +1077,14 @@ class SpiderBotControl(Node):
 						driver.joint_deg_cmd[self.start_id] = np.degrees(self.theta1_reset)
 						driver.joint_deg_cmd[self.start_id+1] = np.degrees(self.theta2_reset)
 						driver.joint_deg_cmd[self.start_id+2] = np.degrees(self.theta3_reset)
-						print("do reset pose")
+						self._print("do reset pose")
 					else:
 						self.setCustomResetPose_byLeg(self.leg_no)
-						print("do reset pose inside")
+						self._print("do reset pose inside")
 
 				else:
 					self.setCustomResetPose_byLeg(self.leg_no)
-					print("do reset custom pose")
+					self._print("do reset custom pose")
 
 				driver.RunServoInTimeByLeg(acc_time=self.reset_movement_time//2, finish_time=self.reset_movement_time, leg_no=self.leg_no)
 				self.last_reset_movement_stamp = time.time()
@@ -1078,14 +1100,14 @@ class SpiderBotControl(Node):
 						driver.joint_deg_cmd[self.start_id] = self.coxa_home_ang
 						driver.joint_deg_cmd[self.start_id+1] = self.femur_home_ang
 						driver.joint_deg_cmd[self.start_id+2] = self.tibia_home_ang
-						print("do home pose")
+						self._print("do home pose")
 					else:
 						self.setCustomHomePose_byLeg(self.leg_no)
-						print("do custom home pose inside")
+						self._print("do custom home pose inside")
 
 				else:
 					self.setCustomHomePose_byLeg(self.leg_no)
-					print("do custom home pose")
+					self._print("do custom home pose")
 
 				driver.RunServoInTimeByLeg(acc_time=self.reset_movement_time//2, finish_time=self.reset_movement_time, leg_no=self.leg_no)
 
@@ -1100,7 +1122,7 @@ class SpiderBotControl(Node):
 
 			## Lastly check if counter is over than 6 means done reseting all legs
 			if self.reset_seq_counter >= 6:
-				print("Done all reset")
+				self._print("Done all reset")
 				self.allow_reset = False
 				self.reset_seq_counter = 0
 				self.home_moving = False
@@ -1214,7 +1236,7 @@ class SpiderBotControl(Node):
 						# start_time = time.time()
 						driver.RunServoInTime(acc_time=0, finish_time=self.delay_cb_time)
 						# period = time.time() - start_time
-						# print("period", period)
+						# self._print("period", period)
 
 						self.last_crab_walk_stamp = time.time()
 
@@ -1312,7 +1334,7 @@ class SpiderBotControl(Node):
 							self.allow_reset = True
 							driver.RunServoInTime(acc_time=0, finish_time=self.delay_cb_time)
 
-					print("delay_time {:.4f} ang_index: {:d} move_norm: {:.2f} move_ang: {:.1f} thr: {:.1f} str: {:.1f} h_cmd: {:.2f} p_cmd: {:.2f}".format(\
+					self._print("delay_time {:.4f} ang_index: {:d} move_norm: {:.2f} move_ang: {:.1f} thr: {:.1f} str: {:.1f} h_cmd: {:.2f} p_cmd: {:.2f}".format(\
 							self.delay_cb_time, self.ang_index, self.move_norm, self.move_ang, \
 							self.thr_axis, self.str_axis, \
 							self.height_cmd, self.pitch_cmd))
@@ -1355,7 +1377,7 @@ class SpiderBotControl(Node):
 						if self.turn_counter >= DATA_POINT_TURN_ALL:
 							self.turn_counter = 0
 
-					print("delay_time {:.4f} turn_counter {:d} turn_axis: {:.1f}".format(\
+					self._print("delay_time {:.4f} turn_counter {:d} turn_axis: {:.1f}".format(\
 						self.delay_turning_time, self.turn_counter, self.turn_axis))
 
 					self.reset_all_resetMotion_params()
@@ -1480,7 +1502,7 @@ class SpiderBotControl(Node):
 				## when receive height_cmd to adjust height
 				if self.got_height_cmd_inspection:
 					self.got_height_cmd_inspection = False
-					print("height_cmd_inspection", self.height_cmd)
+					self._print("height_cmd_inspection {}".format(self.height_cmd))
 
 					driver.ReadPosition()
 
@@ -1559,13 +1581,13 @@ class SpiderBotControl(Node):
 						time.sleep(self.inspect_touch_time/1000)
 						self.readCurrentAndPosition()
 
-						print("servo{:d}: cur: {:.1f} pos: {:.1f} | servo{:d} cur: {:.1f} pos: {:.1f}".format(\
+						self._print("servo{:d}: cur: {:.1f} pos: {:.1f} | servo{:d} cur: {:.1f} pos: {:.1f}".format(\
 							self.insp_sv_list[1], driver.joint_cur_pos[self.insp_sv_list[1]]['cur'], driver.joint_cur_pos[self.insp_sv_list[1]]['pos'],\
 							self.insp_sv_list[2], driver.joint_cur_pos[self.insp_sv_list[2]]['cur'], driver.joint_cur_pos[self.insp_sv_list[2]]['pos']))
 
 						if self.servo_cur_fb[self.insp_sv_list[1]] < -30.0:
-							print("touched!")
-							print(x_touch, y_touch, z_touch)
+							self._print("touched!")
+							self._print("{} {} {}".format(x_touch, y_touch, z_touch))
 							x_touched = x_touch
 							y_touched = y_touch
 							z_touched = z_touch + 4 ## lift up a bit to release stress
@@ -1597,7 +1619,7 @@ class SpiderBotControl(Node):
 						y_insp = self.insp_start_xyz['y']
 						z_insp = self.insp_start_xyz['z'] - self.z_inspect_counter
 
-						# print(x_insp, y_insp, z_insp)
+						# self._print(x_insp, y_insp, z_insp)
 
 						theta1, theta2, theta3 = lib.inv(x_insp, y_insp, z_insp)
 
@@ -1630,10 +1652,10 @@ class SpiderBotControl(Node):
 						diff_y = abs((last_y - self.insp_target_xyz['y']))
 						diff_z = abs((last_z - self.insp_target_xyz['z']))
 
-						print("target_xyz", self.insp_target_xyz)
-						print("last_xyz", last_x, last_y, last_z)
-						print("last_cur", last_cur2, last_cur3)
-						print("diff", diff_x, diff_y, diff_z)
+						self._print("target_xyz {}".format(self.insp_target_xyz))
+						self._print("last_xyz {} {} {}".format(last_x, last_y, last_z))
+						self._print("last_cur {} {}".format(last_cur2, last_cur3))
+						self._print("diff {} {} {}".format(diff_x, diff_y, diff_z))
 
 						train_data_msg = Float32MultiArray()
 						train_data_msg.data = [diff_x, diff_y, diff_z, last_cur2, last_cur3]
@@ -1654,7 +1676,7 @@ class SpiderBotControl(Node):
 						self.insp_leg_xyz['z'] = self.insp_start_xyz['z']+10
 
 						pred = svm_model.predict(np.array([[diff_x, diff_y, diff_z, last_cur2, last_cur3]])).item()
-						print("prediction", pred)
+						self._print("prediction {}".format(pred))
 
 						if pred == 0:
 							self.pub_insp_status(2)
@@ -1669,7 +1691,7 @@ class SpiderBotControl(Node):
 					elif self.insp_step == -1:
 						self.got_inspect_start = False
 						self.insp_step = 0
-						print("failed, cannot touch object")
+						self._print("failed, cannot touch object")
 
 						self.pub_insp_status(-1)
 
@@ -1709,7 +1731,7 @@ class SpiderBotControl(Node):
 		# 	counter_log = 0
 		# 	delay_log = 0
 
-		# print("mode: {} ch1: {:d} ch2: {:d} ch4: {:d} counter: {:d} delay: {:d} ang_index: {:d} allow_rst: {} leg_no: {:d} rst_moving: {} home_moving: {} r_cmd: {:.2f} p_cmd: {:.2f} y_cmd: {:.2f}".format(\
+		# self._print("mode: {} ch1: {:d} ch2: {:d} ch4: {:d} counter: {:d} delay: {:d} ang_index: {:d} allow_rst: {} leg_no: {:d} rst_moving: {} home_moving: {} r_cmd: {:.2f} p_cmd: {:.2f} y_cmd: {:.2f}".format(\
 		# 	self.robot_mode, self.sbus_str, self.sbus_thr, self.sbus_yaw,\
 		# 	counter_log, delay_log, self.ang_index, \
 		# 	self.allow_reset, self.leg_no, self.reset_moving, self.home_moving, \

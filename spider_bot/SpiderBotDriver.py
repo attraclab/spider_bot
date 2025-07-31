@@ -149,6 +149,10 @@ class SpiderBotDriver:
 		self.min_bit = 0
 		self.max_bit = 4095
 
+		for i in range(18):
+			_id = i + 1
+			packetHandler.reboot(portHandler, _id)
+
 		self.joint_deg_cmd = {
 			1: 0.0,
 			2: 0.0,

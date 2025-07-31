@@ -8,9 +8,10 @@ sleep 7
 export DISPLAY=:0.0
 export LOGFILE=/home/$USER/$rosws/src/$rospackage/autostart_scripts/spider_bot_control.log
 
-source /home/$USER/$rosws/src/$rospackage/autostart_scripts/ROS_CONFIG.txt
 source /opt/ros/galactic/setup.bash
 source /home/$USER/$rosws/install/local_setup.bash
+
+export ROS_DOMAIN_ID=1
 
 cd ~/dev_ws/src/spider_bot/spider_bot
 
@@ -20,9 +21,9 @@ do
 		echo "----------------------------------------------" >> $LOGFILE
 		date >> $LOGFILE
 
-		echo "Starting python3 spider_bot_control.py" >> $LOGFILE
+		echo "Starting ros2 run spider_bot spider_bot_control.py" >> $LOGFILE
 
-		python3 -u spider_bot_control.py >> $LOGFILE
+		ros2 launch spider_bot spider_bot_control.launch.py >> $LOGFILE
 
 		echo "program seems to have stopped" >> $LOGFILE
 
